@@ -2,6 +2,17 @@
     "tags": {
         "link": "@link [[Link]] [[Description]]",
         "param": "@param [[Type]] [[Description]]",
-        "returns": "@returns [[Type]]"
-    }
+        "return": "@return [[Type]] [[Description]]"
+    },
+	"types": {
+			"number": 	"integer",
+			"float":	"float",
+			"string": 	"string",
+			"boolean":	"boolean",
+			"array": 	"array",
+			"object": 	"object",
+			"regexp": 	"regExp",
+			"function": "function",
+			"callback": "callback"
+	}
 }

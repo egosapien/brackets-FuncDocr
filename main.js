@@ -46,6 +46,13 @@ define(function (require, exports, module) {
 
 	var prefDialogHTML		= require('text!dialog/prefs.html');
 
+	var allDefinitions 		= {
+		 default: 		require('text!definitions/default.json'),
+         javascript: 	require('text!definitions/js.json'),
+         php: 			require('text!definitions/php.json')
+	}
+	var definitions;
+	
     var COMMAND_ID          = 'funcdocr';
     var COMMAND_ID_SETTINGS = 'funcdocr.settings';
 
@@ -193,6 +200,15 @@ define(function (require, exports, module) {
         return signature;
     }
 
+	
+	/**
+	 * [[Description]]
+	 * @param   {Object}   signature [[Description]]
+	 * @param   {[[Type]]} editor    [[Description]]
+	 * @param   {[[Type]]} position  [[Description]]
+	 * @param   {[[Type]]} matches   [[Description]]
+	 * @returns {[[Type]]} [[Description]]
+	 */
 	function getNormalSignature(signature,editor,position,matches) {
 		var parameters 	= matches[1].split(',');
 
@@ -434,8 +450,14 @@ define(function (require, exports, module) {
 		var maxParamLength = maxPadding.title;
         var maxTypeLength = maxPadding.type;
 
+		// returns or return
+		var returnDocName = 'returns';
+		if (langId == 'php') {
+			returnDocName = 'return';
+		}
+		
 		// if returns is set show align the types of params and returns
-		var tagRightSpace = signature.returns.bool ? '   ' : ' ';
+		var tagRightSpace = signature.returns.bool ? ' '.times(returnDocName.length-'param'.length+1) : ' ';
 
         // Add the parameter lines
         for (var i = 0; i < signature.parameters.length; i++) {
@@ -469,15 +491,18 @@ define(function (require, exports, module) {
 
         // Add the return line
         if (signature.returns.bool) {
-			signature.returns.description 			= signature.returns.description ? signature.returns.description.split(/\n/) : ['[[Description]]'];
+			signature.returns.description = signature.returns.description ? signature.returns.description.split(/\n/) : ['[[Description]]'];
+			
+		
+			
 			// singleline
 			if (signature.returns.type.length == 1) {
 				signature.returns.typeRightSpace = new Array(maxTypeLength + 2 - signature.returns.type[0].length).join(' ');
-				output.push(' * @returns ' + wrapper[0] + signature.returns.type[0] + wrapper[1] +
+				output.push(' * @' + returnDocName + ' ' + wrapper[0] + signature.returns.type[0] + wrapper[1] +
 							signature.returns.typeRightSpace + signature.returns.description[0]);
 				signature.returns.descriptionIndent = new Array(output[output.length-1].length-2-signature.returns.description[0].length).join(' ');
 			} else { // multiline
-				output.push(' * @returns ' + wrapper[0]);
+				output.push(' * @' + returnDocName + ' ' + wrapper[0]);
 				signature.returns.typeIndent = new Array(output[output.length-1].length-3).join(' ');
 				for (var t = 0; t < signature.returns.type.length; t++) {
 					output.push(' *   ' + signature.returns.typeIndent + signature.returns.type[t]);
@@ -751,7 +776,9 @@ define(function (require, exports, module) {
 			if (!match) {
 				paddingRegex = new RegExp('^(\\s+)\\*\\s+');
 				match 		 = paddingRegex.exec(lastLine);
-				length 		 = match[0].length-match[1].length;
+				if (match) {
+					length 	 = match[0].length-match[1].length;
+				}
 			} else {
 				length 		 = match[0].length-match[1].length;
 				// there is no title for @returns
@@ -1013,6 +1040,14 @@ define(function (require, exports, module) {
 		
 		var paramIndex;
 		var paramTypes = [];
+		
+		if (allDefinitions[langId] === undefined) {
+			definitions = allDefinitions.default;
+		} else {
+			definitions = allDefinitions[langId];
+		}
+		
+		var types = definitions.types;
 
 		for (var i = 0; i < code.length; i++) {
 			var char = code.charAt(i);
@@ -1027,17 +1062,17 @@ define(function (require, exports, module) {
 							// check for properties
 							if (!functionAfterParam[2]) {
 								if (PROPERTIES.indexOf(functionAfterParam[1]) === -1) {
-									paramTypes[paramIndex] = 'Object';
+									paramTypes[paramIndex] = types["object"];
 								}
 							} else { // check for functions
 								if (STRING_FUNCTIONS.indexOf(functionAfterParam[1]) !== -1) {
-									paramTypes[paramIndex] = 'String';
+									paramTypes[paramIndex] = types["string"];
 								} else if (ARRAY_FUNCTIONS.indexOf(functionAfterParam[1]) !== -1) {
-									paramTypes[paramIndex] = 'Array';
+									paramTypes[paramIndex] = types["array"];
 								} else if (OBJECT_FUNCTIONS.indexOf(functionAfterParam[1]) !== -1) {
-									paramTypes[paramIndex] = 'Object';
+									paramTypes[paramIndex] = types["object"];
 								} else if (REGEXP_FUNCTIONS.indexOf(functionAfterParam[1]) !== -1) {
-									paramTypes[paramIndex] = 'RegExp';
+									paramTypes[paramIndex] = types["regexp"];
 								}
 							}
 						}
@@ -1053,28 +1088,30 @@ define(function (require, exports, module) {
 						returns.bool = true;
 						// try to get the return type
 						var matches = /\s*?([\s\S]*?);/.exec(code.substr(i+7));
-						var returnText = matches[1].trim();
-						var addType;
-						if (returnText == "false" || returnText == "true") {
-							addType = "Boolean";
-							if (returns.type) {
-								if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
-							} else returns.type = addType;
-						} else if (returnText.charAt(0) == '{') {
-							addType = "Object";
-							if (returns.type) {
-								if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
-							} else returns.type = addType;
-						} else if (returnText.charAt(0) == "[") {
-							addType = "Array";
-							if (returns.type) {
-								if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
-							} else returns.type = addType;
-						} else if (returnText.charAt(0) == "'" || returnText.charAt(0) == '"') {
-							addType = "String";
-							if (returns.type) {
-								if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
-							} else returns.type = addType;
+						if (matches) {
+							var returnText = matches[1].trim();
+							var addType;
+							if (returnText == "false" || returnText == "true") {
+								addType = types["boolean"];
+								if (returns.type) {
+									if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
+								} else returns.type = addType;
+							} else if (returnText.charAt(0) == '{') {
+								addType = types["object"];
+								if (returns.type) {
+									if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
+								} else returns.type = addType;
+							} else if (returnText.charAt(0) == "[") {
+								addType = types["array"]
+								if (returns.type) {
+									if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
+								} else returns.type = addType;
+							} else if (returnText.charAt(0) == "'" || returnText.charAt(0) == '"') {
+								addType = types["string"]
+								if (returns.type) {
+									if (returns.type.indexOf(addType) == -1) returns.type += '|'+addType;
+								} else returns.type = addType;
+							}
 						}
 					}
 					break;
@@ -1231,27 +1268,6 @@ define(function (require, exports, module) {
 		return (indexOf >= 0) ? (indexOf + (startpos || 0)) : indexOf;
 	}
 
-
-	/////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////     Prototypes    //////////////////////////////////
-	/////////////////////////////////////////////////////////////////////////////////////////
-
-	/**
-	 * Find the position of an needle in an array of objects for a special key
-	 * @param   {String} key    key which should be checked against the needle
-	 * @param   {String} needle string that should be array[i][key]
-	 * @returns {Number} return the positon i if needle was found otherwise -1
-	 */
-	Array.prototype.keyIndexOf = function(key,needle) {
-		var array = this;
-		for (var i = 0; i < array.length; i++) {
-			if (array[i][key] == needle) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
 	/**
 	 * Open the preference dialog where the user can change the shortcut
 	 */
@@ -1363,7 +1379,9 @@ define(function (require, exports, module) {
 	}
 
 	function setSelection(editor,posStart,posEnd) {
-		editor.setSelection(posStart, posEnd);
+		// center the selection if it's not in the centered area and not at the top
+		// => center only if the next tag is at the bottom
+		editor.setSelection(posStart, posEnd, true, 1);
 		CommandManager.execute(Commands.FILE_SAVE).done(function() {
 			CommandManager.execute(Commands.SHOW_CODE_HINTS);
 		});
@@ -1398,8 +1416,50 @@ define(function (require, exports, module) {
         }
     }
 
+	/////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////     Prototypes    //////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	/**
+	 * Find the position of an needle in an array of objects for a special key
+	 * @param   {String} key    key which should be checked against the needle
+	 * @param   {String} needle string that should be array[i][key]
+	 * @returns {Number} return the positon i if needle was found otherwise -1
+	 */
+	Array.prototype.keyIndexOf = function(key,needle) {
+		var array = this;
+		for (var i = 0; i < array.length; i++) {
+			if (array[i][key] == needle) {
+				return i;
+			}
+		}
+		return -1;
+	}
+	
+	/**
+	 * Return the given string*times
+	 * @param   {Number} times nr of repetition
+	 * @returns {String} string,string,...,*times
+	 */
+	String.prototype.times = function(times) {
+		var result = this;
+		for (var i = 1; i < times; i++) {
+			result += this;	
+		}
+		return result;
+	}
+	
+	
 	AppInit.appReady(function () {
         var DocrHint = require('hints');
+		
+		var defKeys = Object.keys(allDefinitions);
+		for (var i = 0; i < defKeys.length; i++) {
+			allDefinitions[defKeys[i]] = JSON.parse(allDefinitions[defKeys[i]]);
+		}		
+		allDefinitions.coffeescript = allDefinitions.javascript;
+		allDefinitions.livescript 	= allDefinitions.javascript;
+
 		
         CommandManager.register('funcdocr', COMMAND_ID, handleDocBlock);
 		CommandManager.register('FuncDocr Settings', COMMAND_ID_SETTINGS, openPrefDialog);
